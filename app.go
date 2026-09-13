@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,19 +15,17 @@ import (
 	"smartprint-agent/internal/realtime"
 )
 
-// App is the Wails-bound struct. Every exported method on App is callable
-// directly from the React frontend via the generated JS bindings.
+// App holds all business logic: settings, the print pipeline, and the
+// realtime connection. It knows nothing about whichever GUI toolkit is
+// presenting it — main.go wires the UI's callbacks into these methods.
 type App struct {
-	ctx context.Context
-
 	cfgStore *config.Store
 	engine   *printer.Engine
 	manager  *queue.Manager
 	pusher   *realtime.Client
 }
 
-// NewApp constructs the App with its dependencies wired together. Called
-// once from main() before wails.Run.
+// NewApp constructs the App with its dependencies wired together.
 func NewApp() *App {
 	cfgStore, err := config.NewStore()
 	if err != nil {
@@ -46,27 +43,23 @@ func NewApp() *App {
 	}
 }
 
-// OnStartup is called by Wails once the frontend is ready. It extracts the
-// embedded printer binary, starts the print worker pool, and connects to
-// Pusher if the shop has already been configured.
-func (a *App) OnStartup(ctx context.Context) {
-	a.ctx = ctx
-
+// Start extracts the embedded printer binary, launches the print worker
+// pool, and connects to Pusher if the shop has already been configured.
+// Call once at program startup, before running the UI's message loop.
+func (a *App) Start() {
 	if err := a.engine.Ensure(); err != nil {
 		log.Printf("printer engine init failed: %v", err)
 	}
 
-	a.manager.Start(ctx, 2) // 2 concurrent print workers is plenty for a single-shop counter.
-
-	startTray(ctx, trayIcon)
+	a.manager.Start(2) // 2 concurrent print workers is plenty for a single-shop counter.
 
 	if a.cfgStore.IsConfigured() {
 		a.startRealtime()
 	}
 }
 
-// OnShutdown tears down the Pusher connection cleanly.
-func (a *App) OnShutdown(ctx context.Context) {
+// Stop tears down the Pusher connection cleanly. Call on window close.
+func (a *App) Stop() {
 	if a.pusher != nil {
 		a.pusher.Stop()
 	}
@@ -145,11 +138,11 @@ func (a *App) handlePrintJobEvent(dataJSON string) {
 
 	// Manual confirmation mode: surface the job in the Live Queue tab as
 	// QUEUED + pending, but withhold it from the print pipeline until the
-	// shopkeeper taps "Print Now" (ConfirmJob).
+	// shopkeeper clicks "Print now" (ConfirmJob).
 	a.manager.HoldForConfirmation(job)
 }
 
-// ---- Methods below are bound to the frontend via Wails ----
+// ---- Methods below are called directly by the UI layer (ui.go) ----
 
 // GetConfig returns the current settings for the Settings tab.
 func (a *App) GetConfig() config.Config {
@@ -172,10 +165,15 @@ func (a *App) GetPrinters() ([]string, error) {
 }
 
 // GetQueue returns the current snapshot of all known jobs for the Live
-// Queue tab's initial render (subsequent updates arrive via the
-// "job:status" event).
+// Queue tab's initial render (subsequent updates arrive via
+// OnStatusChange).
 func (a *App) GetQueue() []queue.PrintJob {
 	return a.manager.Snapshot()
+}
+
+// OnStatusChange registers a callback invoked on every job status change.
+func (a *App) OnStatusChange(fn queue.StatusListener) {
+	a.manager.OnStatusChange(fn)
 }
 
 // RetryJob re-enqueues a failed job by ID.

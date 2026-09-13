@@ -5,7 +5,6 @@
 package queue
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,38 +13,39 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"smartprint-agent/internal/config"
 	"smartprint-agent/internal/docprocessor"
 	"smartprint-agent/internal/printer"
 )
-
-// eventStatusChanged is the Wails frontend event name the React Queue tab
-// subscribes to.
-const eventStatusChanged = "job:status"
 
 // bufferSize bounds how many jobs can be pending before Enqueue blocks the
 // caller (the Pusher event handler), preventing unbounded memory growth if
 // jobs arrive faster than they can be printed.
 const bufferSize = 100
 
+// StatusListener is called on every status transition for any job. The UI
+// registers one of these via OnStatusChange to keep the Live Queue view in
+// sync. Manager calls listeners synchronously from whichever goroutine
+// changed the status, so a listener that touches UI widgets MUST marshal
+// itself onto the UI thread (e.g. via walk.Window.Synchronize) before
+// touching any widget — Manager makes no such guarantee itself.
+type StatusListener func(PrintJob)
+
 // Manager owns the job channel, worker goroutines, and in-memory history
 // used to populate the Live Queue tab.
 type Manager struct {
-	ctx       context.Context
 	cfgStore  *config.Store
 	engine    *printer.Engine
 	processor docprocessor.DocumentProcessor
 	jobs      chan PrintJob
 
-	mu      sync.Mutex
-	history map[string]*PrintJob
-	order   []string // preserves insertion order for Snapshot
+	mu        sync.Mutex
+	history   map[string]*PrintJob
+	order     []string // preserves insertion order for Snapshot
+	listeners []StatusListener
 }
 
-// NewManager constructs a Manager. Call Start once a Wails context is
-// available (typically from App.OnStartup).
+// NewManager constructs a Manager. Call Start to launch its worker pool.
 func NewManager(cfgStore *config.Store, engine *printer.Engine, processor docprocessor.DocumentProcessor) *Manager {
 	return &Manager{
 		cfgStore:  cfgStore,
@@ -56,10 +56,17 @@ func NewManager(cfgStore *config.Store, engine *printer.Engine, processor docpro
 	}
 }
 
-// Start binds the Wails runtime context and launches workerCount goroutines
-// that pull jobs off the channel and process them one at a time each.
-func (m *Manager) Start(ctx context.Context, workerCount int) {
-	m.ctx = ctx
+// OnStatusChange registers a listener invoked on every job status
+// transition. Safe to call before or after Start.
+func (m *Manager) OnStatusChange(fn StatusListener) {
+	m.mu.Lock()
+	m.listeners = append(m.listeners, fn)
+	m.mu.Unlock()
+}
+
+// Start launches workerCount goroutines that pull jobs off the channel and
+// process them one at a time each.
+func (m *Manager) Start(workerCount int) {
 	if workerCount < 1 {
 		workerCount = 1
 	}
@@ -78,8 +85,8 @@ func (m *Manager) Enqueue(job PrintJob) {
 
 // HoldForConfirmation records a job as QUEUED and pending shopkeeper
 // confirmation, but does not push it into the print pipeline. Used when
-// Silent Auto-Print is turned off. Call Confirm once the shopkeeper taps
-// "Print Now" in the Live Queue tab.
+// Silent Auto-Print is turned off. Call Confirm once the shopkeeper clicks
+// "Print now" in the Live Queue tab.
 func (m *Manager) HoldForConfirmation(job PrintJob) {
 	job.PendingConfirmation = true
 	m.setStatus(&job, StatusQueued, "")
@@ -105,7 +112,8 @@ func (m *Manager) Confirm(jobID string) error {
 }
 
 // Snapshot returns a copy of all known jobs in the order they were
-// received, newest last, for the frontend's GetQueue call.
+// received, for the UI's initial render before live updates start
+// arriving via OnStatusChange.
 func (m *Manager) Snapshot() []PrintJob {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -236,7 +244,12 @@ func (m *Manager) setStatus(job *PrintJob, status Status, errMsg string) {
 	job.Error = errMsg
 	m.record(job)
 
-	if m.ctx != nil {
-		runtime.EventsEmit(m.ctx, eventStatusChanged, *job)
+	m.mu.Lock()
+	listeners := make([]StatusListener, len(m.listeners))
+	copy(listeners, m.listeners)
+	m.mu.Unlock()
+
+	for _, fn := range listeners {
+		fn(*job)
 	}
 }
