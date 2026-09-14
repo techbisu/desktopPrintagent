@@ -25,7 +25,7 @@ func runUI(app *App) error {
 	var pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit *walk.LineEdit
 	var bwPrinterBox, colorPrinterBox *walk.ComboBox
 	var autoPrintCheck *walk.CheckBox
-	var saveStatusLabel *walk.Label
+	var saveStatusLabel, printerStatusLabel *walk.Label
 
 	model := newJobTableModel()
 
@@ -116,6 +116,19 @@ func runUI(app *App) error {
 									ComboBox{AssignTo: &colorPrinterBox, Editable: false},
 								},
 							},
+							Composite{
+								Layout: HBox{},
+								Children: []Widget{
+									PushButton{
+										Text: "Refresh printer list",
+										OnClicked: func() {
+											loadPrintersIntoBoxes(app, bwPrinterBox, colorPrinterBox, printerStatusLabel)
+										},
+									},
+									Label{AssignTo: &printerStatusLabel, Text: ""},
+									HSpacer{},
+								},
+							},
 							CheckBox{
 								AssignTo: &autoPrintCheck,
 								Text:     "Silent auto-print (print jobs the instant they arrive)",
@@ -160,7 +173,7 @@ func runUI(app *App) error {
 	}
 
 	loadSettingsIntoForm(app, shopIDEdit, authTokenEdit, pusherKeyEdit, pusherClusterEdit,
-		pusherAuthURLEdit, bwPrinterBox, colorPrinterBox, autoPrintCheck)
+		pusherAuthURLEdit, bwPrinterBox, colorPrinterBox, autoPrintCheck, printerStatusLabel)
 
 	model.SetJobs(app.GetQueue())
 
@@ -182,6 +195,7 @@ func loadSettingsIntoForm(
 	shopIDEdit, authTokenEdit, pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit *walk.LineEdit,
 	bwPrinterBox, colorPrinterBox *walk.ComboBox,
 	autoPrintCheck *walk.CheckBox,
+	printerStatusLabel *walk.Label,
 ) {
 	cfg := app.GetConfig()
 	shopIDEdit.SetText(cfg.ShopID)
@@ -191,15 +205,31 @@ func loadSettingsIntoForm(
 	pusherAuthURLEdit.SetText(cfg.PusherAuthURL)
 	autoPrintCheck.SetChecked(cfg.SilentAutoPrint)
 
+	loadPrintersIntoBoxes(app, bwPrinterBox, colorPrinterBox, printerStatusLabel)
+	printers := printerNames(bwPrinterBox)
+	selectComboValue(bwPrinterBox, printers, cfg.BlackWhitePrinter)
+	selectComboValue(colorPrinterBox, printers, cfg.ColorPrinter)
+}
+
+func loadPrintersIntoBoxes(app *App, bwPrinterBox, colorPrinterBox *walk.ComboBox, statusLabel *walk.Label) {
 	printers, err := app.GetPrinters()
 	if err != nil {
 		log.Printf("failed to list printers: %v", err)
-		printers = nil
+		statusLabel.SetText("Could not load printers; see agent.log")
+		return
 	}
 	bwPrinterBox.SetModel(printers)
 	colorPrinterBox.SetModel(printers)
-	selectComboValue(bwPrinterBox, printers, cfg.BlackWhitePrinter)
-	selectComboValue(colorPrinterBox, printers, cfg.ColorPrinter)
+	if len(printers) == 0 {
+		statusLabel.SetText("No installed printers detected")
+		return
+	}
+	statusLabel.SetText(fmt.Sprintf("Found %d printer(s)", len(printers)))
+}
+
+func printerNames(box *walk.ComboBox) []string {
+	printers, _ := box.Model().([]string)
+	return printers
 }
 
 func selectComboValue(box *walk.ComboBox, options []string, value string) {

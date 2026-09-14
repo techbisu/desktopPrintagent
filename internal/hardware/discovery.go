@@ -10,15 +10,15 @@ import (
 )
 
 // ListPrinters returns the names of all printers currently installed on
-// this machine, as reported by the Windows print spooler via PowerShell's
-// Get-Printer cmdlet.
+// this machine. Get-Printer is preferred, with Win32_Printer as a fallback
+// for systems where the PrintManagement module is unavailable.
 func ListPrinters() ([]string, error) {
 	cmd := exec.Command(
 		"powershell",
 		"-NoProfile",
 		"-NonInteractive",
 		"-Command",
-		"Get-Printer | Select-Object -ExpandProperty Name",
+		"$ErrorActionPreference='Stop'; $names=@(); try {$names=@(Get-Printer -ErrorAction Stop | Select-Object -ExpandProperty Name)} catch {}; if ($names.Count -eq 0) {$names=@(Get-CimInstance -ClassName Win32_Printer -ErrorAction Stop | Select-Object -ExpandProperty Name)}; $names",
 	)
 	setHiddenAttrs(cmd)
 
