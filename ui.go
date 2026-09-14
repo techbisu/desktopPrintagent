@@ -35,32 +35,46 @@ func runUI(app *App) error {
 		AssignTo: &mw,
 		Title:    "SmartPrint Agent",
 		Visible:  true,
-		MinSize:  Size{Width: 640, Height: 460},
-		Size:     Size{Width: 720, Height: 500},
-		Layout:   VBox{},
+		MinSize:  Size{Width: 800, Height: 560},
+		Size:     Size{Width: 940, Height: 660},
+		Layout:   VBox{MarginsZero: true, SpacingZero: true},
 		Children: []Widget{
+			Composite{
+				MinSize: Size{Height: 66},
+				MaxSize: Size{Height: 66},
+				Layout:  VBox{Margins: Margins{Left: 22, Top: 10, Right: 22, Bottom: 8}, Spacing: 1},
+				Children: []Widget{
+					Label{Text: "SmartPrint Agent", Font: Font{Family: "Segoe UI", PointSize: 15, Bold: true}},
+					Label{Text: "Ready to receive print jobs • Configure printers and connection below", Font: Font{Family: "Segoe UI", PointSize: 9}},
+				},
+			},
 			TabWidget{
+				Font: Font{Family: "Segoe UI", PointSize: 9},
 				Pages: []TabPage{
 					{
-						Title:  "Live queue",
-						Layout: VBox{},
+						Title:  "Live Queue",
+						Layout: VBox{Margins: Margins{Left: 18, Top: 16, Right: 18, Bottom: 16}, Spacing: 10},
 						Children: []Widget{
+							Label{Text: "Print activity", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}},
+							Label{Text: "Incoming jobs appear here. Jobs can be confirmed or retried from this screen."},
 							TableView{
 								AssignTo:         &queueTable,
 								AlternatingRowBG: true,
+								StretchFactor:    1,
 								Columns: []TableViewColumn{
-									{Title: "Filename", Width: 180},
-									{Title: "Pages x copies", Width: 100},
-									{Title: "Type", Width: 60},
-									{Title: "Price", Width: 70},
-									{Title: "Printer", Width: 130},
-									{Title: "Status", Width: 150},
+									{Title: "Document", Width: 220},
+									{Title: "Pages / Copies", Width: 105},
+									{Title: "Mode", Width: 70},
+									{Title: "Amount", Width: 80},
+									{Title: "Printer", Width: 180},
+									{Title: "Status", Width: 160},
 								},
 								Model: model,
 							},
 							Composite{
 								Layout: HBox{},
 								Children: []Widget{
+									Label{Text: "Select a job to take action."},
 									HSpacer{},
 									PushButton{
 										AssignTo: &confirmBtn,
@@ -82,21 +96,23 @@ func runUI(app *App) error {
 					},
 					{
 						Title:  "Settings",
-						Layout: VBox{},
+						Layout: VBox{Margins: Margins{Left: 18, Top: 16, Right: 18, Bottom: 16}, Spacing: 10},
 						Children: []Widget{
+							Label{Text: "Agent setup", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}},
+							Label{Text: "Enter your shop credentials, then choose the printers this workstation should use."},
 							GroupBox{
-								Title:  "Shop credentials",
-								Layout: Grid{Columns: 2},
+								Title:  "1. Shop credentials",
+								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 16, Right: 14, Bottom: 12}, Spacing: 8},
 								Children: []Widget{
-									Label{Text: "Shop ID"},
+									Label{Text: "Shop ID", MinSize: Size{Width: 130}},
 									LineEdit{AssignTo: &shopIDEdit},
-									Label{Text: "Auth token"},
+									Label{Text: "Access token"},
 									LineEdit{AssignTo: &authTokenEdit, PasswordMode: true},
 								},
 							},
 							GroupBox{
-								Title:  "Realtime connection",
-								Layout: Grid{Columns: 2},
+								Title:  "2. Realtime connection",
+								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 16, Right: 14, Bottom: 12}, Spacing: 8},
 								Children: []Widget{
 									Label{Text: "Pusher app key"},
 									LineEdit{AssignTo: &pusherKeyEdit},
@@ -107,20 +123,20 @@ func runUI(app *App) error {
 								},
 							},
 							GroupBox{
-								Title:  "Printers",
-								Layout: Grid{Columns: 2},
+								Title:  "3. Printer routing",
+								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 16, Right: 14, Bottom: 12}, Spacing: 8},
 								Children: []Widget{
-									Label{Text: "Black and white printer"},
-									ComboBox{AssignTo: &bwPrinterBox, Editable: false},
+									Label{Text: "Black & white printer"},
+									ComboBox{AssignTo: &bwPrinterBox, Editable: false, MinSize: Size{Width: 360, Height: 26}},
 									Label{Text: "Color printer"},
-									ComboBox{AssignTo: &colorPrinterBox, Editable: false},
+									ComboBox{AssignTo: &colorPrinterBox, Editable: false, MinSize: Size{Width: 360, Height: 26}},
 								},
 							},
 							Composite{
 								Layout: HBox{},
 								Children: []Widget{
 									PushButton{
-										Text: "Refresh printer list",
+										Text: "Refresh printers",
 										OnClicked: func() {
 											loadPrintersIntoBoxes(app, bwPrinterBox, colorPrinterBox, printerStatusLabel)
 										},
@@ -129,15 +145,19 @@ func runUI(app *App) error {
 									HSpacer{},
 								},
 							},
-							CheckBox{
-								AssignTo: &autoPrintCheck,
-								Text:     "Silent auto-print (print jobs the instant they arrive)",
+							GroupBox{
+								Title:  "4. Print behavior",
+								Layout: VBox{Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 4},
+								Children: []Widget{
+									CheckBox{AssignTo: &autoPrintCheck, Text: "Automatically print jobs as soon as they arrive"},
+									Label{Text: "Turn this off to review each job in the Live Queue before printing."},
+								},
 							},
 							Composite{
 								Layout: HBox{},
 								Children: []Widget{
 									PushButton{
-										Text: "Save settings",
+										Text: "Save configuration",
 										OnClicked: func() {
 											saveSettings(app, shopIDEdit, authTokenEdit,
 												pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit,
