@@ -34,6 +34,7 @@ func runUI(app *App) error {
 	err := MainWindow{
 		AssignTo: &mw,
 		Title:    "SmartPrint Agent",
+		Visible:  true,
 		MinSize:  Size{Width: 640, Height: 460},
 		Size:     Size{Width: 720, Height: 500},
 		Layout:   VBox{},
