@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -93,16 +94,17 @@ func (a *App) startRealtime() {
 // incomingJobPayload mirrors the JSON the web platform publishes on
 // "new-print-job".
 type incomingJobPayload struct {
-	ID          string  `json:"id"`
-	ServiceCode string  `json:"serviceCode"`
-	Filename    string  `json:"filename"`
-	FileURL     string  `json:"fileUrl"`
-	FileType    string  `json:"fileType"`
-	Pages       int     `json:"pages"`
-	Copies      int     `json:"copies"`
-	IsColor     bool    `json:"isColor"`
-	IsDuplex    bool    `json:"isDuplex"`
-	TotalAmount float64 `json:"totalAmount"`
+	ID            string  `json:"id"`
+	ServiceCode   string  `json:"serviceCode"`
+	Filename      string  `json:"filename"`
+	FileURL       string  `json:"fileUrl"`
+	FileType      string  `json:"fileType"`
+	Pages         int     `json:"pages"`
+	Copies        int     `json:"copies"`
+	IsColor       bool    `json:"isColor"`
+	IsDuplex      bool    `json:"isDuplex"`
+	TotalAmount   float64 `json:"totalAmount"`
+	PaymentMethod string  `json:"paymentMethod"`
 }
 
 func (a *App) handlePrintJobEvent(dataJSON string) {
@@ -118,16 +120,25 @@ func (a *App) handlePrintJobEvent(dataJSON string) {
 	}
 
 	job := queue.PrintJob{
-		ID:          id,
-		ServiceCode: payload.ServiceCode,
-		Filename:    payload.Filename,
-		FileURL:     payload.FileURL,
-		FileType:    payload.FileType,
-		Pages:       payload.Pages,
-		Copies:      payload.Copies,
-		IsColor:     payload.IsColor,
-		IsDuplex:    payload.IsDuplex,
-		TotalAmount: payload.TotalAmount,
+		ID:            id,
+		ServiceCode:   payload.ServiceCode,
+		Filename:      payload.Filename,
+		FileURL:       payload.FileURL,
+		FileType:      payload.FileType,
+		Pages:         payload.Pages,
+		Copies:        payload.Copies,
+		IsColor:       payload.IsColor,
+		IsDuplex:      payload.IsDuplex,
+		TotalAmount:   payload.TotalAmount,
+		PaymentMethod: strings.ToLower(payload.PaymentMethod),
+	}
+
+	// UPI payments have no server-side payment webhook in the customer
+	// portal. Hold those jobs even when auto-print is enabled so the operator
+	// can verify the incoming UPI payment before releasing the document.
+	if job.PaymentMethod == "upi" {
+		a.manager.HoldForConfirmation(job)
+		return
 	}
 
 	cfg := a.cfgStore.Get()
@@ -185,4 +196,9 @@ func (a *App) RetryJob(jobID string) error {
 // Auto-Print off) into the print pipeline.
 func (a *App) ConfirmJob(jobID string) error {
 	return a.manager.Confirm(jobID)
+}
+
+// PreviewJob opens a selected queued or historical document for review.
+func (a *App) PreviewJob(jobID string) error {
+	return a.manager.Preview(jobID)
 }

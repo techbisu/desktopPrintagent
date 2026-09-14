@@ -19,13 +19,13 @@ import (
 func runUI(app *App) error {
 	var mw *walk.MainWindow
 	var queueTable *walk.TableView
-	var retryBtn, confirmBtn *walk.PushButton
+	var retryBtn, confirmBtn, previewBtn *walk.PushButton
 
 	var shopIDEdit, authTokenEdit *walk.LineEdit
 	var pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit *walk.LineEdit
 	var bwPrinterBox, colorPrinterBox *walk.ComboBox
 	var autoPrintCheck *walk.CheckBox
-	var saveStatusLabel, printerStatusLabel *walk.Label
+	var saveStatusLabel, printerStatusLabel, previewStatusLabel *walk.Label
 
 	model := newJobTableModel()
 
@@ -45,7 +45,7 @@ func runUI(app *App) error {
 				Layout:  VBox{Margins: Margins{Left: 22, Top: 10, Right: 22, Bottom: 8}, Spacing: 1},
 				Children: []Widget{
 					Label{Text: "SmartPrint Agent", Font: Font{Family: "Segoe UI", PointSize: 15, Bold: true}},
-					Label{Text: "Ready to receive print jobs • Configure printers and connection below", Font: Font{Family: "Segoe UI", PointSize: 9}},
+					Label{Text: "Secure local printing • Review payment requests and manage your print queue", Font: Font{Family: "Segoe UI", PointSize: 9}},
 				},
 			},
 			TabWidget{
@@ -56,7 +56,7 @@ func runUI(app *App) error {
 						Layout: VBox{Margins: Margins{Left: 18, Top: 16, Right: 18, Bottom: 16}, Spacing: 10},
 						Children: []Widget{
 							Label{Text: "Print activity", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}},
-							Label{Text: "Incoming jobs appear here. Jobs can be confirmed or retried from this screen."},
+							Label{Text: "Preview documents, verify UPI payments, then release or retry jobs from one place."},
 							TableView{
 								AssignTo:         &queueTable,
 								AlternatingRowBG: true,
@@ -74,8 +74,15 @@ func runUI(app *App) error {
 							Composite{
 								Layout: HBox{},
 								Children: []Widget{
-									Label{Text: "Select a job to take action."},
+									Label{AssignTo: &previewStatusLabel, Text: "Select a job to take action."},
 									HSpacer{},
+									PushButton{
+										AssignTo: &previewBtn,
+										Text:     "Preview document",
+										OnClicked: func() {
+											handlePreview(app, queueTable, model, mw, previewStatusLabel)
+										},
+									},
 									PushButton{
 										AssignTo: &confirmBtn,
 										Text:     "Print now",
@@ -203,6 +210,9 @@ func runUI(app *App) error {
 	app.OnStatusChange(func(job queue.PrintJob) {
 		mw.Synchronize(func() {
 			model.Upsert(job)
+			if job.Status == queue.StatusQueued && job.PendingConfirmation && job.PaymentMethod == "upi" {
+				promptUPIPaymentConfirmation(app, job)
+			}
 		})
 	})
 
@@ -319,5 +329,37 @@ func handleConfirm(app *App, table *walk.TableView, model *jobTableModel) {
 	}
 	if err := app.ConfirmJob(job.ID); err != nil {
 		log.Printf("confirm failed: %v", err)
+	}
+}
+
+func handlePreview(app *App, table *walk.TableView, model *jobTableModel, mw *walk.MainWindow, statusLabel *walk.Label) {
+	idx := table.CurrentIndex()
+	job, ok := model.JobAt(idx)
+	if !ok {
+		statusLabel.SetText("Select a job before previewing.")
+		return
+	}
+	statusLabel.SetText("Preparing secure preview…")
+	go func() {
+		err := app.PreviewJob(job.ID)
+		mw.Synchronize(func() {
+			if err != nil {
+				statusLabel.SetText(fmt.Sprintf("Preview failed: %v", err))
+				return
+			}
+			statusLabel.SetText("Preview opened. The temporary file is removed when you close it.")
+		})
+	}()
+}
+
+func promptUPIPaymentConfirmation(app *App, job queue.PrintJob) {
+	message := fmt.Sprintf(
+		"UPI payment verification is required before printing.\n\nDocument: %s\nAmount: INR %.2f\n\nConfirm that payment has arrived in the shop's UPI app, then choose Yes to print.",
+		job.Filename, job.TotalAmount,
+	)
+	if walk.MsgBox(nil, "Confirm UPI payment", message, walk.MsgBoxYesNo|walk.MsgBoxIconInformation) == walk.DlgCmdYes {
+		if err := app.ConfirmJob(job.ID); err != nil {
+			log.Printf("UPI print confirmation failed: %v", err)
+		}
 	}
 }

@@ -109,3 +109,17 @@ func (e *Engine) ExecutePrint(job Job) error {
 	}
 	return nil
 }
+
+// StartPreview opens a document in SumatraPDF's normal interactive window.
+// The caller owns cmd.Wait and is responsible for deleting any temporary
+// preview file only after the viewer exits.
+func (e *Engine) StartPreview(filePath string) (*exec.Cmd, error) {
+	if err := e.Ensure(); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(e.binPath, filePath)
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start document preview: %w", err)
+	}
+	return cmd, nil
+}

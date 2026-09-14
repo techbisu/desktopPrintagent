@@ -27,6 +27,7 @@ type PrintJob struct {
 	IsColor         bool    `json:"isColor"`
 	IsDuplex        bool    `json:"isDuplex"`
 	TotalAmount     float64 `json:"totalAmount"`
+	PaymentMethod   string  `json:"paymentMethod,omitempty"`
 	Status          Status  `json:"status"`
 	PrinterAssigned string  `json:"printerAssigned"`
 	Error           string  `json:"error,omitempty"`

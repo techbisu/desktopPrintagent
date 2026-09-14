@@ -140,6 +140,41 @@ func (m *Manager) Retry(jobID string) error {
 	return nil
 }
 
+// Preview downloads a temporary copy of a job and opens it in SumatraPDF.
+// Preview files are removed once the viewer process exits, preserving the
+// agent's privacy guarantees without freezing the UI while the user reviews
+// a document.
+func (m *Manager) Preview(jobID string) error {
+	m.mu.Lock()
+	job, ok := m.history[jobID]
+	if ok {
+		copy := *job
+		job = &copy
+	}
+	m.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("job %s not found", jobID)
+	}
+	if job.FileURL == "" {
+		return fmt.Errorf("job %s has no document URL", jobID)
+	}
+
+	tempPath, err := m.downloadPreview(*job)
+	if err != nil {
+		return fmt.Errorf("download preview: %w", err)
+	}
+	cmd, err := m.engine.StartPreview(tempPath)
+	if err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+	go func() {
+		_ = cmd.Wait()
+		_ = os.Remove(tempPath)
+	}()
+	return nil
+}
+
 func (m *Manager) workerLoop() {
 	for job := range m.jobs {
 		m.process(job)
@@ -244,6 +279,45 @@ func (m *Manager) download(job PrintJob) (string, error) {
 		return "", err
 	}
 	return destPath, nil
+}
+
+func (m *Manager) downloadPreview(job PrintJob) (string, error) {
+	dir := filepath.Join(os.TempDir(), "SmartPrint")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	file, err := os.CreateTemp(dir, "preview-*.pdf")
+	if err != nil {
+		return "", err
+	}
+	path := file.Name()
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+	}()
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Get(job.FileURL)
+	if err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_ = os.Remove(path)
+		return "", fmt.Errorf("unexpected status %d fetching file", resp.StatusCode)
+	}
+	if _, err := io.Copy(file, resp.Body); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	file = nil
+	return path, nil
 }
 
 func (m *Manager) record(job *PrintJob) {

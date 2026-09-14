@@ -64,6 +64,9 @@ func (m *jobTableModel) Value(row, col int) interface{} {
 // are waiting on shopkeeper confirmation from ordinary queued jobs.
 func statusLabel(j queue.PrintJob) string {
 	if j.Status == queue.StatusQueued && j.PendingConfirmation {
+		if j.PaymentMethod == "upi" {
+			return "Awaiting UPI confirmation"
+		}
 		return "Awaiting confirmation"
 	}
 	switch j.Status {
