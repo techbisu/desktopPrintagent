@@ -25,13 +25,15 @@ jobs:
         run: go mod tidy
 
       - name: Build Windows executable
-        run: go build -ldflags="-H=windowsgui -s -w" -o build/bin/SmartPrintAgent.exe .
+        run: |
+          go build -ldflags="-H=windowsgui -s -w" -o build/bin/SmartPrintAgent.exe .
+          Copy-Item build/windows/SmartPrintAgent.exe.manifest build/bin/SmartPrintAgent.exe.manifest
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: SmartPrintAgent-windows
-          path: build/bin/*.exe
+          path: build/bin/*
           if-no-files-found: error
 
       - name: Create GitHub Release
