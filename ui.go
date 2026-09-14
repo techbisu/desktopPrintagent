@@ -224,6 +224,11 @@ func loadPrintersIntoBoxes(app *App, bwPrinterBox, colorPrinterBox *walk.ComboBo
 		statusLabel.SetText("No installed printers detected")
 		return
 	}
+	// A walk ComboBox remains visually blank until it has a selected index,
+	// even when its model contains items. Choose a usable default so the
+	// discovered printers are immediately visible.
+	bwPrinterBox.SetCurrentIndex(0)
+	colorPrinterBox.SetCurrentIndex(0)
 	statusLabel.SetText(fmt.Sprintf("Found %d printer(s)", len(printers)))
 }
 
