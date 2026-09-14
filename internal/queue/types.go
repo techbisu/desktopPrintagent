@@ -5,11 +5,13 @@ package queue
 type Status string
 
 const (
-	StatusQueued      Status = "QUEUED"
-	StatusDownloading Status = "DOWNLOADING"
-	StatusPrinting    Status = "PRINTING"
-	StatusCompleted   Status = "COMPLETED"
-	StatusFailed      Status = "FAILED"
+	StatusQueued         Status = "QUEUED"
+	StatusDownloading    Status = "DOWNLOADING"
+	StatusPrinting       Status = "PRINTING"
+	StatusPrinterQueued  Status = "PRINTER_QUEUED"
+	StatusPrinterOffline Status = "PRINTER_OFFLINE"
+	StatusCompleted      Status = "COMPLETED"
+	StatusFailed         Status = "FAILED"
 )
 
 // PrintJob is the full record tracked by the desktop agent for a single

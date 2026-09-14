@@ -73,6 +73,10 @@ func statusLabel(j queue.PrintJob) string {
 		return "Downloading"
 	case queue.StatusPrinting:
 		return "Printing"
+	case queue.StatusPrinterQueued:
+		return "Queued in printer"
+	case queue.StatusPrinterOffline:
+		return "Printer offline"
 	case queue.StatusCompleted:
 		return "Completed"
 	case queue.StatusFailed:

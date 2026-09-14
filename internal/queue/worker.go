@@ -15,6 +15,7 @@ import (
 
 	"smartprint-agent/internal/config"
 	"smartprint-agent/internal/docprocessor"
+	"smartprint-agent/internal/hardware"
 	"smartprint-agent/internal/printer"
 )
 
@@ -175,6 +176,19 @@ func (m *Manager) process(job PrintJob) {
 		printerName = cfg.ColorPrinter
 	}
 	job.PrinterAssigned = printerName
+	state, err := hardware.GetPrinterState(printerName)
+	if err != nil {
+		m.setStatus(&job, StatusFailed, fmt.Sprintf("could not verify printer %q: %v", printerName, err))
+		return
+	}
+	if !state.Found {
+		m.setStatus(&job, StatusPrinterOffline, fmt.Sprintf("printer %q is not installed", printerName))
+		return
+	}
+	if state.Offline {
+		m.setStatus(&job, StatusPrinterOffline, fmt.Sprintf("printer %q is offline (%s)", printerName, state.Status))
+		return
+	}
 
 	m.setStatus(&job, StatusPrinting, "")
 
@@ -190,7 +204,10 @@ func (m *Manager) process(job PrintJob) {
 		return
 	}
 
-	m.setStatus(&job, StatusCompleted, "")
+	// SumatraPDF has handed the document to the Windows spooler. Windows may
+	// still wait for paper, a network printer, or a device recovering from an
+	// error, so do not claim the physical page was completed here.
+	m.setStatus(&job, StatusPrinterQueued, "Accepted by the Windows print queue")
 }
 
 // download streams the job's file to %Temp%/SmartPrint/<job_id>.<ext>.
