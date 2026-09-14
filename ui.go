@@ -8,6 +8,7 @@ import (
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
+	"github.com/lxn/win"
 
 	"smartprint-agent/internal/config"
 	"smartprint-agent/internal/queue"
@@ -35,8 +36,8 @@ func runUI(app *App) error {
 		AssignTo: &mw,
 		Title:    "SmartPrint Agent",
 		Visible:  true,
-		MinSize:  Size{Width: 800, Height: 560},
-		Size:     Size{Width: 940, Height: 660},
+		MinSize:  Size{Width: 600, Height: 400},
+		Size:     Size{Width: 900, Height: 550},
 		Layout:   VBox{MarginsZero: true, SpacingZero: true},
 		Children: []Widget{
 			Composite{
@@ -80,7 +81,7 @@ func runUI(app *App) error {
 										AssignTo: &previewBtn,
 										Text:     "Preview document",
 										OnClicked: func() {
-											handlePreview(app, queueTable, model, mw, previewStatusLabel)
+											handlePreview(app, queueTable, model, mw, previewStatusLabel, previewBtn)
 										},
 									},
 									PushButton{
@@ -183,6 +184,21 @@ func runUI(app *App) error {
 	}.Create()
 	if err != nil {
 		return err
+	}
+
+	// Center the window on the primary screen
+	if hwnd := mw.Handle(); hwnd != 0 {
+		cxScreen := win.GetSystemMetrics(win.SM_CXSCREEN)
+		cyScreen := win.GetSystemMetrics(win.SM_CYSCREEN)
+		x := (cxScreen - int32(mw.Width())) / 2
+		y := (cyScreen - int32(mw.Height())) / 2
+		
+		mw.SetBounds(walk.Rectangle{
+			X:      int(x),
+			Y:      int(y),
+			Width:  mw.Width(),
+			Height: mw.Height(),
+		})
 	}
 
 	// Minimize to tray instead of exiting, unless Quit was chosen from the
@@ -332,7 +348,7 @@ func handleConfirm(app *App, table *walk.TableView, model *jobTableModel) {
 	}
 }
 
-func handlePreview(app *App, table *walk.TableView, model *jobTableModel, mw *walk.MainWindow, statusLabel *walk.Label) {
+func handlePreview(app *App, table *walk.TableView, model *jobTableModel, mw *walk.MainWindow, statusLabel *walk.Label, previewBtn *walk.PushButton) {
 	idx := table.CurrentIndex()
 	job, ok := model.JobAt(idx)
 	if !ok {
@@ -340,9 +356,11 @@ func handlePreview(app *App, table *walk.TableView, model *jobTableModel, mw *wa
 		return
 	}
 	statusLabel.SetText("Preparing secure preview…")
+	previewBtn.SetEnabled(false)
 	go func() {
 		err := app.PreviewJob(job.ID)
 		mw.Synchronize(func() {
+			previewBtn.SetEnabled(true)
 			if err != nil {
 				statusLabel.SetText(fmt.Sprintf("Preview failed: %v", err))
 				return

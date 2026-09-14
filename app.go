@@ -1,10 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -37,17 +43,24 @@ func NewApp() *App {
 	processor := docprocessor.NewDirectPdfProcessor()
 	manager := queue.NewManager(cfgStore, engine, processor)
 
-	return &App{
+	app := &App{
 		cfgStore: cfgStore,
 		engine:   engine,
 		manager:  manager,
 	}
+	
+	// Hook status changes to our server reporter
+	manager.OnStatusChange(app.reportStatusToServer)
+
+	return app
 }
 
 // Start extracts the embedded printer binary, launches the print worker
 // pool, and connects to Pusher if the shop has already been configured.
 // Call once at program startup, before running the UI's message loop.
 func (a *App) Start() {
+	a.clearTempDir()
+
 	if err := a.engine.Ensure(); err != nil {
 		log.Printf("printer engine init failed: %v", err)
 	}
@@ -63,6 +76,13 @@ func (a *App) Start() {
 func (a *App) Stop() {
 	if a.pusher != nil {
 		a.pusher.Stop()
+	}
+}
+
+func (a *App) clearTempDir() {
+	dir := filepath.Join(os.TempDir(), "SmartPrint")
+	if err := os.RemoveAll(dir); err != nil {
+		log.Printf("failed to clear temp dir: %v", err)
 	}
 }
 
@@ -151,6 +171,58 @@ func (a *App) handlePrintJobEvent(dataJSON string) {
 	// QUEUED + pending, but withhold it from the print pipeline until the
 	// shopkeeper clicks "Print now" (ConfirmJob).
 	a.manager.HoldForConfirmation(job)
+}
+
+func (a *App) reportStatusToServer(job queue.PrintJob) {
+	cfg := a.cfgStore.Get()
+	if cfg.PusherAuthURL == "" || cfg.AuthToken == "" {
+		return
+	}
+
+	u, err := url.Parse(cfg.PusherAuthURL)
+	if err != nil {
+		log.Printf("invalid PusherAuthURL for status reporting: %v", err)
+		return
+	}
+
+	// Route to /api/agent/status on the same host
+	u.Path = "/api/agent/status"
+	endpoint := u.String()
+
+	payload := map[string]interface{}{
+		"jobId":  job.ID,
+		"status": string(job.Status),
+		"error":  job.Error,
+		"shopId": cfg.ShopID,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("failed to marshal status payload: %v", err)
+		return
+	}
+
+	// Fire and forget in the background
+	go func() {
+		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+		if err != nil {
+			log.Printf("failed to create status request: %v", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("failed to report status for job %s: %v", job.ID, err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			log.Printf("status report for job %s failed with HTTP %d", job.ID, resp.StatusCode)
+		}
+	}()
 }
 
 // ---- Methods below are called directly by the UI layer (ui.go) ----
