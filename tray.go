@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/lxn/walk"
+	"github.com/lxn/win"
 )
 
 //go:embed build/windows/icon.ico
@@ -94,7 +95,5 @@ func loadAppIcon() (*walk.Icon, error) {
 // win32Restore un-minimizes the window if it was minimized before being
 // hidden to the tray.
 func win32Restore(mw *walk.MainWindow) {
-	if mw.WindowState() == walk.WindowStateMinimized {
-		mw.SetWindowState(walk.WindowStateNormal)
-	}
+	win.ShowWindow(mw.Handle(), win.SW_RESTORE)
 }
