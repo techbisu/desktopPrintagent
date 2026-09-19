@@ -16,6 +16,9 @@ param (
 $ErrorActionPreference = "Stop"
 
 $AppName = "SmartPrint Agent"
+$AppVersion = "1.1.0"
+$Publisher = "BiswajitN99"
+$Website = "https://biswajitn.in"
 $InstallDir = "$env:ProgramFiles\SmartPrint Agent"
 $ExeName = "SmartPrintAgent.exe"
 $TargetPath = Join-Path $InstallDir $ExeName
@@ -45,6 +48,13 @@ if ($Uninstall) {
     $DesktopShortcut = "$([Environment]::GetFolderPath('CommonDesktopDirectory'))\$AppName.lnk"
     if (Test-Path $StartMenuShortcut) { Remove-Item $StartMenuShortcut -Force }
     if (Test-Path $DesktopShortcut) { Remove-Item $DesktopShortcut -Force }
+
+    # Remove Windows Add/Remove Programs registry key
+    $UninstallKey = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SmartPrintAgent"
+    if (Test-Path $UninstallKey) {
+        Remove-Item -Path $UninstallKey -Recurse -Force
+        Write-Host "Removed Add/Remove Programs registry entry." -ForegroundColor Green
+    }
 
     # Remove Install Folder
     if (Test-Path $InstallDir) {
@@ -131,6 +141,24 @@ if (-not $NoAutoStart) {
     Set-ItemProperty -Path $RunKey -Name "SmartPrintAgent" -Value "`"$TargetPath`" -minimized" -Force
     Write-Host "[✓] Configured Auto-Start on Windows login (-minimized to tray)" -ForegroundColor Green
 }
+
+# 4. Register in Windows Add/Remove Programs (Programs and Features)
+$UninstallScript = Join-Path $InstallDir "install.ps1"
+Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $UninstallScript -Force -ErrorAction SilentlyContinue
+
+$UninstallKey = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SmartPrintAgent"
+if (-not (Test-Path $UninstallKey)) {
+    New-Item -Path $UninstallKey -Force | Out-Null
+}
+Set-ItemProperty -Path $UninstallKey -Name "DisplayName" -Value $AppName -Force
+Set-ItemProperty -Path $UninstallKey -Name "DisplayVersion" -Value $AppVersion -Force
+Set-ItemProperty -Path $UninstallKey -Name "Publisher" -Value $Publisher -Force
+Set-ItemProperty -Path $UninstallKey -Name "URLInfoAbout" -Value $Website -Force
+Set-ItemProperty -Path $UninstallKey -Name "HelpLink" -Value $Website -Force
+Set-ItemProperty -Path $UninstallKey -Name "InstallLocation" -Value $InstallDir -Force
+Set-ItemProperty -Path $UninstallKey -Name "DisplayIcon" -Value (Join-Path $InstallDir "icon.ico") -Force
+Set-ItemProperty -Path $UninstallKey -Name "UninstallString" -Value "powershell.exe -ExecutionPolicy Bypass -File `"$UninstallScript`" -Uninstall" -Force
+Write-Host "[✓] Registered in Windows Add/Remove Programs (Publisher: $Publisher, URL: $Website)" -ForegroundColor Green
 
 Write-Host "`nInstallation successfully completed!" -ForegroundColor Cyan
 Write-Host "You can now launch SmartPrint Agent from your Start Menu, Desktop, or reboot to verify auto-start." -ForegroundColor White

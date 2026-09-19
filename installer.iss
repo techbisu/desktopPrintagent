@@ -3,7 +3,8 @@
 
 #define MyAppName "SmartPrint Agent"
 #define MyAppVersion "1.1.0"
-#define MyAppPublisher "SmartPrint"
+#define MyAppPublisher "BiswajitN99"
+#define MyAppURL "https://biswajitn.in"
 #define MyAppExeName "SmartPrintAgent.exe"
 
 [Setup]
@@ -11,6 +12,16 @@ AppId={{C8E11D9A-4E3F-44F1-8AC8-A78C53A37280}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoOriginalFileName=SmartPrintAgent-Setup.exe
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}.0
 DefaultDirName={autopf}\SmartPrint Agent
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
@@ -24,7 +35,7 @@ ArchitecturesInstallIn64BitMode=x64
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
 RestartApplications=no
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\icon.ico
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 

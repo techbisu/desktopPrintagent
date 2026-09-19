@@ -467,6 +467,18 @@ func runUI(app *App, startMinimized bool) error {
 									HSpacer{},
 								},
 							},
+
+							VSpacer{Size: 8},
+							Composite{
+								Layout: HBox{MarginsZero: true},
+								Children: []Widget{
+									Label{
+										Text: "SmartPrint Agent v1.1.0 • Publisher: BiswajitN99 • Website: https://biswajitn.in",
+										Font: Font{Family: "Segoe UI", PointSize: 8},
+									},
+									HSpacer{},
+								},
+							},
 						},
 					},
 				},
