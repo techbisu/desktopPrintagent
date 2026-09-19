@@ -21,9 +21,9 @@ var appIconBytes []byte
 // handler knows to allow the real close instead of hiding to tray again.
 func setupTray(mw *walk.MainWindow, quitting *bool) (*walk.NotifyIcon, error) {
 	icon, err := loadAppIcon()
-	if err != nil {
-		log.Printf("tray icon load failed, using default: %v", err)
-		icon = nil
+	if err != nil || icon == nil {
+		log.Printf("tray icon load failed, using application fallback: %v", err)
+		icon = walk.IconApplication()
 	}
 
 	ni, err := walk.NewNotifyIcon(mw)
@@ -81,15 +81,22 @@ func setupTray(mw *walk.MainWindow, quitting *bool) (*walk.NotifyIcon, error) {
 // since walk's icon loader needs a file path rather than an in-memory
 // buffer for .ico resources.
 func loadAppIcon() (*walk.Icon, error) {
+	if len(appIconBytes) == 0 {
+		return walk.IconApplication(), nil
+	}
 	dir := filepath.Join(os.TempDir(), "SmartPrint")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
+		return walk.IconApplication(), nil
 	}
 	path := filepath.Join(dir, "icon.ico")
 	if err := os.WriteFile(path, appIconBytes, 0o600); err != nil {
-		return nil, err
+		return walk.IconApplication(), nil
 	}
-	return walk.NewIconFromFile(path)
+	icon, err := walk.NewIconFromFile(path)
+	if err != nil {
+		return walk.IconApplication(), nil
+	}
+	return icon, nil
 }
 
 // win32Restore un-minimizes the window if it was minimized before being
