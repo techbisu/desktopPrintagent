@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,10 @@ type App struct {
 	engine   *printer.Engine
 	manager  *queue.Manager
 	pusher   *realtime.Client
+
+	connStateMu sync.RWMutex
+	connState   realtime.ConnectionState
+	onConnState func(realtime.ConnectionState)
 }
 
 // NewApp constructs the App with its dependencies wired together.
@@ -101,12 +106,13 @@ func (a *App) startRealtime() {
 	}
 
 	a.pusher = &realtime.Client{
-		AppKey:      cfg.PusherAppKey,
-		Cluster:     cfg.PusherCluster,
-		ChannelName: fmt.Sprintf("private-shop-%s", cfg.ShopID),
-		AuthURL:     cfg.PusherAuthURL,
-		AuthToken:   cfg.AuthToken,
-		OnJob:       a.handlePrintJobEvent,
+		AppKey:        cfg.PusherAppKey,
+		Cluster:       cfg.PusherCluster,
+		ChannelName:   fmt.Sprintf("private-shop-%s", cfg.ShopID),
+		AuthURL:       cfg.PusherAuthURL,
+		AuthToken:     cfg.AuthToken,
+		OnJob:         a.handlePrintJobEvent,
+		OnStateChange: a.handleConnectionStateChange,
 	}
 	a.pusher.Start()
 }
@@ -153,15 +159,15 @@ func (a *App) handlePrintJobEvent(dataJSON string) {
 		PaymentMethod: strings.ToLower(payload.PaymentMethod),
 	}
 
-	// UPI payments have no server-side payment webhook in the customer
-	// portal. Hold those jobs even when auto-print is enabled so the operator
-	// can verify the incoming UPI payment before releasing the document.
-	if job.PaymentMethod == "upi" {
+	cfg := a.cfgStore.Get()
+
+	// Direct UPI or counter payments require verification unless AutoAcceptUPI is enabled
+	isManualPay := isManualPayment(job.PaymentMethod)
+	if isManualPay && !cfg.AutoAcceptUPI {
 		a.manager.HoldForConfirmation(job)
 		return
 	}
 
-	cfg := a.cfgStore.Get()
 	if cfg.SilentAutoPrint {
 		a.manager.Enqueue(job)
 		return
@@ -171,6 +177,11 @@ func (a *App) handlePrintJobEvent(dataJSON string) {
 	// QUEUED + pending, but withhold it from the print pipeline until the
 	// shopkeeper clicks "Print now" (ConfirmJob).
 	a.manager.HoldForConfirmation(job)
+}
+
+func isManualPayment(method string) bool {
+	m := strings.ToLower(strings.TrimSpace(method))
+	return m == "upi" || m == "counter" || m == "cash" || m == "pay_at_counter"
 }
 
 func (a *App) reportStatusToServer(job queue.PrintJob) {
@@ -273,4 +284,37 @@ func (a *App) ConfirmJob(jobID string) error {
 // PreviewJob opens a selected queued or historical document for review.
 func (a *App) PreviewJob(jobID string) error {
 	return a.manager.Preview(jobID)
+}
+
+func (a *App) handleConnectionStateChange(state realtime.ConnectionState) {
+	a.connStateMu.Lock()
+	a.connState = state
+	fn := a.onConnState
+	a.connStateMu.Unlock()
+
+	if fn != nil {
+		fn(state)
+	}
+}
+
+// OnConnectionStateChange registers a callback that triggers when Pusher connects/disconnects.
+func (a *App) OnConnectionStateChange(fn func(realtime.ConnectionState)) {
+	a.connStateMu.Lock()
+	a.onConnState = fn
+	state := a.connState
+	a.connStateMu.Unlock()
+
+	if fn != nil && state != "" {
+		fn(state)
+	}
+}
+
+// GetConnectionState returns current realtime connection state.
+func (a *App) GetConnectionState() realtime.ConnectionState {
+	a.connStateMu.RLock()
+	defer a.connStateMu.RUnlock()
+	if a.connState == "" {
+		return realtime.StateDisconnected
+	}
+	return a.connState
 }

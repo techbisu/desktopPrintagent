@@ -41,11 +41,19 @@ func main() {
 	log.Printf("SmartPrint Agent starting")
 	ensureSingleInstance()
 
+	startMinimized := false
+	for _, arg := range os.Args[1:] {
+		if arg == "-minimized" || arg == "--minimized" || arg == "/minimized" {
+			startMinimized = true
+			break
+		}
+	}
+
 	app := NewApp()
 	app.Start()
 	defer app.Stop()
 
-	if err := runUI(app); err != nil {
+	if err := runUI(app, startMinimized); err != nil {
 		log.Printf("failed to start UI: %v", err)
 		walk.MsgBox(nil, "SmartPrint Agent", "The application could not start. See %LocalAppData%\\SmartPrint\\agent.log for details.\n\n"+err.Error(), walk.MsgBoxIconError)
 	}

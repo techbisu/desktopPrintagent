@@ -21,6 +21,18 @@ import (
 // event's "data" field whenever one arrives.
 type OnPrintJob func(dataJSON string)
 
+// ConnectionState represents the Pusher connection status.
+type ConnectionState string
+
+const (
+	StateDisconnected ConnectionState = "Disconnected"
+	StateConnecting   ConnectionState = "Connecting"
+	StateConnected    ConnectionState = "Connected"
+)
+
+// OnStateChange is invoked whenever the Pusher connection status changes.
+type OnStateChange func(state ConnectionState)
+
 // Client maintains a reconnecting websocket connection to Pusher and
 // resubscribes to the configured private channel on every (re)connect.
 type Client struct {
@@ -30,7 +42,8 @@ type Client struct {
 	AuthURL     string // shop backend endpoint that signs channel auth
 	AuthToken   string // bearer token identifying this shop to AuthURL
 
-	OnJob OnPrintJob
+	OnJob         OnPrintJob
+	OnStateChange OnStateChange
 
 	stop chan struct{}
 }
@@ -61,6 +74,13 @@ func (c *Client) Stop() {
 	if c.stop != nil {
 		close(c.stop)
 	}
+	c.setState(StateDisconnected)
+}
+
+func (c *Client) setState(state ConnectionState) {
+	if c.OnStateChange != nil {
+		c.OnStateChange(state)
+	}
 }
 
 func (c *Client) runForever() {
@@ -70,16 +90,20 @@ func (c *Client) runForever() {
 	for {
 		select {
 		case <-c.stop:
+			c.setState(StateDisconnected)
 			return
 		default:
 		}
 
+		c.setState(StateConnecting)
 		if err := c.connectAndListen(); err != nil {
+			c.setState(StateDisconnected)
 			log.Printf("[pusher] connection error: %v (retrying in %s)", err, backoff)
 		}
 
 		select {
 		case <-c.stop:
+			c.setState(StateDisconnected)
 			return
 		case <-time.After(backoff):
 		}
@@ -122,6 +146,8 @@ func (c *Client) connectAndListen() error {
 	if err := conn.WriteJSON(subscribePayload); err != nil {
 		return fmt.Errorf("send subscribe: %w", err)
 	}
+
+	c.setState(StateConnected)
 
 	// Reset backoff for the caller by returning nil only on clean shutdown;
 	// on any read error below we return an error and runForever backs off.

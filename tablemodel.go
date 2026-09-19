@@ -39,19 +39,22 @@ func (m *jobTableModel) Value(row, col int) interface{} {
 	j := m.jobs[row]
 	switch col {
 	case 0:
+		if j.ServiceCode != "" {
+			return fmt.Sprintf("[%s] %s", j.ServiceCode, j.Filename)
+		}
 		return j.Filename
 	case 1:
-		return fmt.Sprintf("%d x %d", j.Pages, j.Copies)
+		return fmt.Sprintf("%d pgs × %d", j.Pages, j.Copies)
 	case 2:
 		if j.IsColor {
-			return "Color"
+			return "🎨 Color"
 		}
-		return "B/W"
+		return "🔲 B/W"
 	case 3:
-		return fmt.Sprintf("%.2f", j.TotalAmount)
+		return fmt.Sprintf("₹ %.2f", j.TotalAmount)
 	case 4:
 		if j.PrinterAssigned == "" {
-			return "-"
+			return "—"
 		}
 		return j.PrinterAssigned
 	case 5:
@@ -60,33 +63,110 @@ func (m *jobTableModel) Value(row, col int) interface{} {
 	return ""
 }
 
+// StyleCell applies distinct colors to status states in the table.
+func (m *jobTableModel) StyleCell(style *walk.CellStyle) {
+	row := style.Row()
+	if row < 0 {
+		return
+	}
+	m.mu.Lock()
+	if row >= len(m.jobs) {
+		m.mu.Unlock()
+		return
+	}
+	j := m.jobs[row]
+	m.mu.Unlock()
+
+	if style.Col() == 5 {
+		switch {
+		case j.Status == queue.StatusQueued && j.PendingConfirmation:
+			style.TextColor = walk.RGB(190, 85, 0)
+		case j.Status == queue.StatusFailed || j.Status == queue.StatusPrinterOffline:
+			style.TextColor = walk.RGB(200, 20, 20)
+		case j.Status == queue.StatusPrinting || j.Status == queue.StatusDownloading:
+			style.TextColor = walk.RGB(0, 102, 204)
+		case j.Status == queue.StatusCompleted:
+			style.TextColor = walk.RGB(16, 130, 48)
+		}
+	}
+}
+
 // statusLabel renders a human-readable status, distinguishing jobs that
 // are waiting on shopkeeper confirmation from ordinary queued jobs.
 func statusLabel(j queue.PrintJob) string {
 	if j.Status == queue.StatusQueued && j.PendingConfirmation {
 		if j.PaymentMethod == "upi" {
-			return "Awaiting UPI confirmation"
+			return "⚠️ Awaiting UPI Confirmation"
 		}
-		return "Awaiting confirmation"
+		return "⏳ Needs Manual Approval"
 	}
 	switch j.Status {
 	case queue.StatusQueued:
-		return "Queued"
+		return "⏳ In Queue"
 	case queue.StatusDownloading:
-		return "Downloading"
+		return "📥 Downloading..."
 	case queue.StatusPrinting:
-		return "Printing"
+		return "🖨️ Printing..."
 	case queue.StatusPrinterQueued:
-		return "Queued in printer"
+		return "📄 Sent to printer"
 	case queue.StatusPrinterOffline:
-		return "Printer offline"
+		return "⚠️ Printer offline"
 	case queue.StatusCompleted:
-		return "Completed"
+		return "✅ Completed"
 	case queue.StatusFailed:
-		return "Failed"
+		if j.Error != "" {
+			return fmt.Sprintf("❌ Failed (%s)", j.Error)
+		}
+		return "❌ Failed"
 	default:
 		return string(j.Status)
 	}
+}
+
+// GetStats returns counts for active, pending, completed, and failed jobs.
+func (m *jobTableModel) GetStats() (total, pending, active, completed, failed int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	total = len(m.jobs)
+	for _, j := range m.jobs {
+		if j.Status == queue.StatusQueued && j.PendingConfirmation {
+			pending++
+		} else if j.Status == queue.StatusPrinting || j.Status == queue.StatusDownloading || j.Status == queue.StatusPrinterQueued {
+			active++
+		} else if j.Status == queue.StatusCompleted {
+			completed++
+		} else if j.Status == queue.StatusFailed || j.Status == queue.StatusPrinterOffline {
+			failed++
+		}
+	}
+	return
+}
+
+// FirstPendingJob returns the earliest job needing operator action, if any.
+func (m *jobTableModel) FirstPendingJob() (queue.PrintJob, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, j := range m.jobs {
+		if j.Status == queue.StatusQueued && j.PendingConfirmation {
+			return j, true
+		}
+	}
+	return queue.PrintJob{}, false
+}
+
+// ClearCompleted removes completed jobs from the table.
+func (m *jobTableModel) ClearCompleted() {
+	m.mu.Lock()
+	filtered := make([]queue.PrintJob, 0, len(m.jobs))
+	for _, j := range m.jobs {
+		if j.Status != queue.StatusCompleted {
+			filtered = filtered
+			filtered = append(filtered, j)
+		}
+	}
+	m.jobs = filtered
+	m.mu.Unlock()
+	m.PublishRowsReset()
 }
 
 // SetJobs replaces the full job list (used for the initial snapshot load)

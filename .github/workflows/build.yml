@@ -2,10 +2,10 @@ name: Build Windows Agent
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
     tags: ["v*"]
   pull_request:
-    branches: [master]
+    branches: [master, main]
   workflow_dispatch: {}
 
 jobs:
@@ -30,7 +30,16 @@ jobs:
           go build -ldflags="-H=windowsgui -s -w" -o build/bin/SmartPrintAgent.exe .
           Copy-Item build/windows/SmartPrintAgent.exe.manifest build/bin/SmartPrintAgent.exe.manifest
 
-      - name: Upload build artifact
+      - name: Compile Inno Setup Installer (C:\Program Files Setup)
+        run: |
+          if (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe") {
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+          } else {
+            choco install innosetup --no-progress
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+          }
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: SmartPrintAgent-windows

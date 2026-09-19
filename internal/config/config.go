@@ -18,6 +18,7 @@ type Config struct {
 	BlackWhitePrinter string `json:"blackWhitePrinter"`
 	ColorPrinter      string `json:"colorPrinter"`
 	SilentAutoPrint   bool   `json:"silentAutoPrint"`
+	AutoAcceptUPI     bool   `json:"autoAcceptUPI"`
 }
 
 // Store wraps a Config with a mutex and knows how to load/save itself.
