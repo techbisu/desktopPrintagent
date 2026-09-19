@@ -207,9 +207,12 @@ func runUI(app *App, startMinimized bool) error {
 				},
 			},
 
+			HSeparator{},
+
 			// Main Tab View
 			TabWidget{
-				Font: Font{Family: "Segoe UI", PointSize: 9},
+				StretchFactor: 1,
+				Font:          Font{Family: "Segoe UI", PointSize: 9},
 				Pages: []TabPage{
 					// TAB 1: LIVE QUEUE
 					{
@@ -368,115 +371,121 @@ func runUI(app *App, startMinimized bool) error {
 					// TAB 2: SETTINGS
 					{
 						Title:  "Settings & Routing",
-						Layout: VBox{Margins: Margins{Left: 18, Top: 14, Right: 18, Bottom: 14}, Spacing: 10},
+						Layout: VBox{MarginsZero: true, SpacingZero: true},
 						Children: []Widget{
-							Label{Text: "Workstation Configuration", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}},
-							Label{Text: "Configure your shop identification, realtime credentials, and hardware printer routing below."},
-
-							GroupBox{
-								Title:  "1. Shop Identification",
-								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
+							ScrollView{
+								HorizontalFixed: true,
+								Layout:          VBox{Margins: Margins{Left: 20, Top: 16, Right: 20, Bottom: 20}, Spacing: 12},
 								Children: []Widget{
-									Label{Text: "Shop ID", MinSize: Size{Width: 140}},
-									LineEdit{AssignTo: &shopIDEdit, ToolTipText: "Unique shop identifier registered on the platform"},
-									Label{Text: "Access Token"},
-									LineEdit{AssignTo: &authTokenEdit, PasswordMode: true, ToolTipText: "Bearer token used to authenticate Pusher channels"},
-								},
-							},
+									Label{Text: "Workstation Configuration", Font: Font{Family: "Segoe UI", PointSize: 11, Bold: true}},
+									Label{Text: "Configure your shop identification, realtime credentials, and hardware printer routing below."},
 
-							GroupBox{
-								Title:  "2. Realtime WebSocket Connection (Pusher)",
-								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
-								Children: []Widget{
-									Label{Text: "Pusher App Key"},
-									LineEdit{AssignTo: &pusherKeyEdit},
-									Label{Text: "Pusher Cluster"},
-									LineEdit{AssignTo: &pusherClusterEdit},
-									Label{Text: "Auth Endpoint URL"},
-									LineEdit{AssignTo: &pusherAuthURLEdit, ToolTipText: "e.g. https://your-domain.com/api/pusher/auth"},
-								},
-							},
-
-							GroupBox{
-								Title:  "3. Hardware Printer Routing",
-								Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
-								Children: []Widget{
-									Label{Text: "Black & White Printer"},
-									ComboBox{AssignTo: &bwPrinterBox, Editable: false, MinSize: Size{Width: 380, Height: 26}},
-									Label{Text: "Color Printer"},
-									ComboBox{AssignTo: &colorPrinterBox, Editable: false, MinSize: Size{Width: 380, Height: 26}},
-								},
-							},
-
-							Composite{
-								Layout: HBox{Margins: Margins{Left: 4}},
-								Children: []Widget{
-									PushButton{
-										Text: "🔄 Refresh installed printers",
-										OnClicked: func() {
-											loadPrintersIntoBoxes(app, bwPrinterBox, colorPrinterBox, printerStatusLabel)
+									GroupBox{
+										Title:  "1. Shop Identification",
+										Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
+										Children: []Widget{
+											Label{Text: "Shop ID", MinSize: Size{Width: 150}},
+											LineEdit{AssignTo: &shopIDEdit, ToolTipText: "Unique shop identifier registered on the platform"},
+											Label{Text: "Access Token", MinSize: Size{Width: 150}},
+											LineEdit{AssignTo: &authTokenEdit, PasswordMode: true, ToolTipText: "Bearer token used to authenticate Pusher channels"},
 										},
 									},
-									Label{AssignTo: &printerStatusLabel, Text: ""},
-									HSpacer{},
-								},
-							},
 
-							GroupBox{
-								Title:  "4. Automation & Startup Options",
-								Layout: VBox{Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 6},
-								Children: []Widget{
-									CheckBox{
-										AssignTo: &autoPrintCheck,
-										Text:     "Automatically print standard jobs upon receipt (Silent Auto-Print)",
-									},
-									Label{
-										Text: "When unchecked, jobs pause in the Live Queue for manual confirmation before printing.",
-									},
-									VSpacer{Size: 4},
-									CheckBox{
-										AssignTo: &autoAcceptUPICheck,
-										Text:     "Auto-accept Counter Pay & direct UPI Pay (print without confirmation popup)",
-									},
-									Label{
-										Text: "When checked, UPI and counter payment jobs print directly without showing the confirmation popup.",
-									},
-									VSpacer{Size: 4},
-									CheckBox{
-										AssignTo: &autoStartCheck,
-										Text:     "Launch automatically on Windows startup (Auto-Start in system tray)",
-									},
-									Label{
-										Text: "Starts SmartPrint Agent minimized in the system tray whenever Windows boots up.",
-									},
-								},
-							},
-
-							Composite{
-								Layout: HBox{Margins: Margins{Top: 6}},
-								Children: []Widget{
-									PushButton{
-										Text: "💾 Save Configuration",
-										OnClicked: func() {
-											saveSettings(app, shopIDEdit, authTokenEdit,
-												pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit,
-												bwPrinterBox, colorPrinterBox, autoPrintCheck, autoAcceptUPICheck, autoStartCheck, saveStatusLabel, updateDashboard)
+									GroupBox{
+										Title:  "2. Realtime WebSocket Connection (Pusher)",
+										Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
+										Children: []Widget{
+											Label{Text: "Pusher App Key", MinSize: Size{Width: 150}},
+											LineEdit{AssignTo: &pusherKeyEdit},
+											Label{Text: "Pusher Cluster", MinSize: Size{Width: 150}},
+											LineEdit{AssignTo: &pusherClusterEdit},
+											Label{Text: "Auth Endpoint URL", MinSize: Size{Width: 150}},
+											LineEdit{AssignTo: &pusherAuthURLEdit, ToolTipText: "e.g. https://your-domain.com/api/pusher/auth"},
 										},
 									},
-									Label{AssignTo: &saveStatusLabel, Text: ""},
-									HSpacer{},
-								},
-							},
 
-							VSpacer{Size: 8},
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									Label{
-										Text: "SmartPrint Agent v1.1.0 • Publisher: BiswajitN99 • Website: https://biswajitn.in",
-										Font: Font{Family: "Segoe UI", PointSize: 8},
+									GroupBox{
+										Title:  "3. Hardware Printer Routing",
+										Layout: Grid{Columns: 2, Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 8},
+										Children: []Widget{
+											Label{Text: "Black & White Printer", MinSize: Size{Width: 150}},
+											ComboBox{AssignTo: &bwPrinterBox, Editable: false},
+											Label{Text: "Color Printer", MinSize: Size{Width: 150}},
+											ComboBox{AssignTo: &colorPrinterBox, Editable: false},
+										},
 									},
-									HSpacer{},
+
+									Composite{
+										Layout: HBox{Margins: Margins{Left: 4}},
+										Children: []Widget{
+											PushButton{
+												Text: "🔄 Refresh installed printers",
+												OnClicked: func() {
+													loadPrintersIntoBoxes(app, bwPrinterBox, colorPrinterBox, printerStatusLabel)
+												},
+											},
+											Label{AssignTo: &printerStatusLabel, Text: ""},
+											HSpacer{},
+										},
+									},
+
+									GroupBox{
+										Title:  "4. Automation & Startup Options",
+										Layout: VBox{Margins: Margins{Left: 14, Top: 14, Right: 14, Bottom: 12}, Spacing: 6},
+										Children: []Widget{
+											CheckBox{
+												AssignTo: &autoPrintCheck,
+												Text:     "Automatically print standard jobs upon receipt (Silent Auto-Print)",
+											},
+											Label{
+												Text: "When unchecked, jobs pause in the Live Queue for manual confirmation before printing.",
+											},
+											VSpacer{Size: 4},
+											CheckBox{
+												AssignTo: &autoAcceptUPICheck,
+												Text:     "Auto-accept Counter Pay & direct UPI Pay (print without confirmation popup)",
+											},
+											Label{
+												Text: "When checked, UPI and counter payment jobs print directly without showing the confirmation popup.",
+											},
+											VSpacer{Size: 4},
+											CheckBox{
+												AssignTo: &autoStartCheck,
+												Text:     "Launch automatically on Windows startup (Auto-Start in system tray)",
+											},
+											Label{
+												Text: "Starts SmartPrint Agent minimized in the system tray whenever Windows boots up.",
+											},
+										},
+									},
+
+									Composite{
+										Layout: HBox{Margins: Margins{Top: 6}},
+										Children: []Widget{
+											PushButton{
+												Text: "💾 Save Configuration",
+												OnClicked: func() {
+													saveSettings(app, shopIDEdit, authTokenEdit,
+														pusherKeyEdit, pusherClusterEdit, pusherAuthURLEdit,
+														bwPrinterBox, colorPrinterBox, autoPrintCheck, autoAcceptUPICheck, autoStartCheck, saveStatusLabel, updateDashboard)
+												},
+											},
+											Label{AssignTo: &saveStatusLabel, Text: ""},
+											HSpacer{},
+										},
+									},
+
+									VSpacer{Size: 8},
+									Composite{
+										Layout: HBox{MarginsZero: true},
+										Children: []Widget{
+											Label{
+												Text: "SmartPrint Agent v1.1.0 • Publisher: BiswajitN99 • Website: https://biswajitn.in",
+												Font: Font{Family: "Segoe UI", PointSize: 8},
+											},
+											HSpacer{},
+										},
+									},
 								},
 							},
 						},
@@ -495,6 +504,12 @@ func runUI(app *App, startMinimized bool) error {
 		cyScreen := win.GetSystemMetrics(win.SM_CYSCREEN)
 		x := (cxScreen - int32(mw.Width())) / 2
 		y := (cyScreen - int32(mw.Height())) / 2
+		if x < 0 {
+			x = 0
+		}
+		if y < 0 {
+			y = 0
+		}
 
 		mw.SetBounds(walk.Rectangle{
 			X:      int(x),
