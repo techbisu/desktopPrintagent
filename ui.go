@@ -207,7 +207,6 @@ func runUI(app *App, startMinimized bool) error {
 				},
 			},
 
-			HSeparator{},
 
 			// Main Tab View
 			TabWidget{
