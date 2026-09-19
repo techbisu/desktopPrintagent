@@ -160,7 +160,6 @@ func (m *jobTableModel) ClearCompleted() {
 	filtered := make([]queue.PrintJob, 0, len(m.jobs))
 	for _, j := range m.jobs {
 		if j.Status != queue.StatusCompleted {
-			filtered = filtered
 			filtered = append(filtered, j)
 		}
 	}

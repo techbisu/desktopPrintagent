@@ -24,6 +24,7 @@ func runUI(app *App, startMinimized bool) error {
 	var queueTable *walk.TableView
 	var retryBtn, confirmBtn, previewBtn, clearBtn *walk.PushButton
 
+	var headerComposite *walk.Composite
 	var logoImageView *walk.ImageView
 	var headerConnLabel, headerStatsLabel *walk.Label
 	var alertBanner, progressComposite *walk.Composite
@@ -42,6 +43,11 @@ func runUI(app *App, startMinimized bool) error {
 
 	model := newJobTableModel()
 	quitting := false
+
+	appIcon, _ := loadAppIcon()
+	if appIcon == nil {
+		appIcon = walk.IconApplication()
+	}
 
 	// Helper to refresh dashboard status bar & badges
 	updateDashboard := func() {
@@ -158,6 +164,7 @@ func runUI(app *App, startMinimized bool) error {
 	err := MainWindow{
 		AssignTo: &mw,
 		Title:    "SmartPrint Agent — Desktop Print Station",
+		Icon:     appIcon,
 		Visible:  !startMinimized,
 		MinSize:  Size{Width: 720, Height: 480},
 		Size:     Size{Width: 960, Height: 600},
@@ -171,15 +178,13 @@ func runUI(app *App, startMinimized bool) error {
 		Children: []Widget{
 			// Top Banner Header
 			Composite{
-				MinSize: Size{Height: 64},
-				MaxSize: Size{Height: 64},
-				Layout:  HBox{Margins: Margins{Left: 20, Top: 10, Right: 20, Bottom: 10}, Spacing: 12},
+				AssignTo: &headerComposite,
+				Layout:   HBox{Margins: Margins{Left: 20, Top: 8, Right: 20, Bottom: 8}, Spacing: 12},
 				Children: []Widget{
 					ImageView{
 						AssignTo: &logoImageView,
-						Mode:     ImageViewModeShrink,
-						MinSize:  Size{Width: 44, Height: 44},
-						MaxSize:  Size{Width: 44, Height: 44},
+						Image:    appIcon,
+						Mode:     ImageViewModeIdeal,
 					},
 					Composite{
 						Layout: VBox{MarginsZero: true, Spacing: 2},
@@ -188,7 +193,7 @@ func runUI(app *App, startMinimized bool) error {
 							Label{Text: "Counter Print Automation • Silent Hardware Routing & Secure Shredding", Font: Font{Family: "Segoe UI", PointSize: 9}},
 						},
 					},
-					HSpacer{},
+					HSpacer{GreedyLocallyOnly: true},
 					Composite{
 						Layout: VBox{MarginsZero: true, Spacing: 2},
 						Children: []Widget{
