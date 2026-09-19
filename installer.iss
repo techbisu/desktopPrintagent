@@ -60,6 +60,34 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Registry]
 ; Register HKCU Run entry if autostart task is checked during setup
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SmartPrintAgent"; ValueData: """{app}\{#MyAppExeName}"" -minimized"; Flags: uninsdeletevalue; Tasks: autostart
+; Unconditionally ensure the autostart Run entry is removed on uninstall even if configured in-app
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "SmartPrintAgent"; Flags: dontcreatekey uninsdeletevalue
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\SmartPrint"
+Type: filesandordirs; Name: "{userappdata}\SmartPrint"
+Type: filesandordirs; Name: "{app}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Terminate running instances before setup begins
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  Exec('taskkill.exe', '/F /IM SmartPrintAgent.exe /IM SumatraPDF.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(400);
+end;
+
+// Terminate running instances before uninstallation begins
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  Exec('taskkill.exe', '/F /IM SmartPrintAgent.exe /IM SumatraPDF.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(400);
+end;

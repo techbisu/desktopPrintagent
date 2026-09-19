@@ -33,8 +33,9 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
 if ($Uninstall) {
     Write-Host "Uninstalling $AppName..." -ForegroundColor Yellow
 
-    # Stop running process
-    Get-Process -Name "SmartPrintAgent" -ErrorAction SilentlyContinue | Stop-Process -Force
+    # Stop running processes
+    Get-Process -Name "SmartPrintAgent", "SumatraPDF" -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 400
 
     # Remove Registry Auto-Start
     $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
@@ -60,6 +61,22 @@ if ($Uninstall) {
     if (Test-Path $InstallDir) {
         Remove-Item -Path $InstallDir -Recurse -Force
         Write-Host "Removed $InstallDir." -ForegroundColor Green
+    }
+
+    # Remove LocalAppData & AppData caches and settings
+    $LocalSmartPrint = "$env:LocalAppData\SmartPrint"
+    if (Test-Path $LocalSmartPrint) {
+        Remove-Item -Path $LocalSmartPrint -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Removed local cache and logs." -ForegroundColor Green
+    }
+    $RoamingSmartPrint = "$env:AppData\SmartPrint"
+    if (Test-Path $RoamingSmartPrint) {
+        Remove-Item -Path $RoamingSmartPrint -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Removed configuration data." -ForegroundColor Green
+    }
+    $TempSmartPrint = Join-Path $env:Temp "SmartPrint"
+    if (Test-Path $TempSmartPrint) {
+        Remove-Item -Path $TempSmartPrint -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     Write-Host "$AppName has been completely uninstalled." -ForegroundColor Green

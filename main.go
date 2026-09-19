@@ -39,15 +39,28 @@ func main() {
 		}
 	}()
 	log.Printf("SmartPrint Agent starting")
-	ensureSingleInstance()
-
-	startMinimized := false
 	for _, arg := range os.Args[1:] {
-		if arg == "-minimized" || arg == "--minimized" || arg == "/minimized" {
+		switch arg {
+		case "-kill", "--kill", "/kill", "-quit", "--quit", "/quit":
+			log.Printf("Kill/quit argument detected, stopping all running instances...")
+			KillAllInstances()
+			return
+		case "-uninstall", "--uninstall", "/uninstall":
+			log.Printf("Uninstall argument detected...")
+			_ = SetAutoStart(false)
+			KillAllInstances()
+			tempDir := filepath.Join(os.TempDir(), "SmartPrint")
+			_ = os.RemoveAll(tempDir)
+			if cacheDir, err := os.UserCacheDir(); err == nil {
+				_ = os.RemoveAll(filepath.Join(cacheDir, "SmartPrint"))
+			}
+			return
+		case "-minimized", "--minimized", "/minimized":
 			startMinimized = true
-			break
 		}
 	}
+
+	ensureSingleInstance()
 
 	app := NewApp()
 	app.Start()

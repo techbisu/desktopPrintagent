@@ -44,7 +44,7 @@ func setupTray(mw *walk.MainWindow, quitting *bool) (*walk.NotifyIcon, error) {
 	}
 
 	showAction := walk.NewAction()
-	showAction.SetText("Show window")
+	showAction.SetText("Open SmartPrint Agent")
 	showAction.Triggered().Attach(func() {
 		mw.Show()
 		mw.SetFocus()
@@ -54,8 +54,12 @@ func setupTray(mw *walk.MainWindow, quitting *bool) (*walk.NotifyIcon, error) {
 		log.Printf("failed to add tray show action: %v", err)
 	}
 
+	if sep, err := walk.NewSeparatorAction(); err == nil {
+		_ = ni.ContextMenu().Actions().Add(sep)
+	}
+
 	quitAction := walk.NewAction()
-	quitAction.SetText("Quit")
+	quitAction.SetText("Quit SmartPrint Agent")
 	quitAction.Triggered().Attach(func() {
 		*quitting = true
 		mw.Close()

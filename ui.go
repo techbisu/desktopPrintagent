@@ -5,6 +5,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/lxn/walk"
@@ -169,6 +172,27 @@ func runUI(app *App, startMinimized bool) error {
 		MinSize:  Size{Width: 720, Height: 480},
 		Size:     Size{Width: 960, Height: 600},
 		Layout:   VBox{MarginsZero: true, SpacingZero: true},
+		MenuItems: []MenuItem{
+			Menu{
+				Title: "&File",
+				Items: []MenuItem{
+					Action{
+						Text: "&Minimize to Tray",
+						OnTriggered: func() {
+							mw.Hide()
+						},
+					},
+					Separator{},
+					Action{
+						Text: "E&xit SmartPrint Agent",
+						OnTriggered: func() {
+							quitting = true
+							mw.Close()
+						},
+					},
+				},
+			},
+		},
 		StatusBarItems: []StatusBarItem{
 			{AssignTo: &connStatusItem, Width: 180, ToolTipText: "Realtime WebSocket connection status"},
 			{AssignTo: &queueStatsItem, Width: 260, ToolTipText: "Active jobs and queue counters"},
@@ -207,6 +231,14 @@ func runUI(app *App, startMinimized bool) error {
 								Text:     "Total: 0  |  Pending: 0  |  Active: 0  |  Done: 0",
 								Font:     Font{Family: "Segoe UI", PointSize: 9},
 							},
+						},
+					},
+					PushButton{
+						Text: "Quit",
+						ToolTipText: "Exit SmartPrint Agent completely",
+						OnClicked: func() {
+							quitting = true
+							mw.Close()
 						},
 					},
 				},
@@ -479,6 +511,30 @@ func runUI(app *App, startMinimized bool) error {
 										},
 									},
 
+									VSpacer{Size: 4},
+									GroupBox{
+										Title: "Application Controls",
+										Layout: HBox{Margins: Margins{Left: 10, Top: 8, Right: 10, Bottom: 8}, Spacing: 10},
+										Children: []Widget{
+											PushButton{
+												Text: "🚪 Quit Agent",
+												ToolTipText: "Completely stop background workers and exit the application",
+												OnClicked: func() {
+													quitting = true
+													mw.Close()
+												},
+											},
+											PushButton{
+												Text: "🗑️ Uninstall Agent",
+												ToolTipText: "Remove auto-start, clean cache, and uninstall SmartPrint Agent",
+												OnClicked: func() {
+													triggerUninstallFromUI(mw, &quitting)
+												},
+											},
+											HSpacer{},
+										},
+									},
+
 									VSpacer{Size: 8},
 									Composite{
 										Layout: HBox{MarginsZero: true},
@@ -523,13 +579,25 @@ func runUI(app *App, startMinimized bool) error {
 		})
 	}
 
-	// Minimize to tray instead of exiting, unless Quit was chosen from the tray menu.
+	var notifyIcon *walk.NotifyIcon
+	var errTray error
+	notifyIcon, errTray = setupTray(mw, &quitting)
+	if errTray != nil {
+		log.Printf("tray setup failed (continuing without tray icon): %v", errTray)
+	}
+
+	var notifiedTray bool
+	// Minimize to tray instead of exiting, unless Quit was chosen.
 	mw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
 		if quitting {
 			return
 		}
 		*canceled = true
 		mw.Hide()
+		if !notifiedTray && notifyIcon != nil {
+			notifiedTray = true
+			_ = notifyIcon.ShowInfo("SmartPrint Agent", "Minimized to system tray. Click 'Quit' or right-click the tray icon to exit.")
+		}
 	})
 
 	if appIcon, err := loadAppIcon(); err == nil && appIcon != nil {
@@ -541,10 +609,6 @@ func runUI(app *App, startMinimized bool) error {
 
 	if queueTable != nil {
 		queueTable.SetGridlines(true)
-	}
-
-	if _, err := setupTray(mw, &quitting); err != nil {
-		log.Printf("tray setup failed (continuing without tray icon): %v", err)
 	}
 
 	loadSettingsIntoForm(app, shopIDEdit, authTokenEdit, pusherKeyEdit, pusherClusterEdit,
@@ -802,3 +866,56 @@ func promptUPIPaymentConfirmation(mw walk.Form, app *App, job queue.PrintJob) {
 		}
 	}
 }
+
+func triggerUninstallFromUI(mw *walk.MainWindow, quitting *bool) {
+	if walk.MsgBox(mw, "Uninstall SmartPrint Agent",
+		"Are you sure you want to stop SmartPrint Agent and remove it from this computer?",
+		walk.MsgBoxYesNo|walk.MsgBoxIconQuestion) != walk.DlgCmdYes {
+		return
+	}
+
+	// 1. Remove autostart registry entry
+	_ = SetAutoStart(false)
+
+	// 2. Check for Inno Setup unins000.exe
+	exeDir := ""
+	if exePath, err := os.Executable(); err == nil {
+		exeDir = filepath.Dir(exePath)
+	}
+
+	uninstallerPath := filepath.Join(exeDir, "unins000.exe")
+	if _, err := os.Stat(uninstallerPath); err == nil {
+		cmd := exec.Command(uninstallerPath)
+		_ = cmd.Start()
+		*quitting = true
+		mw.Close()
+		return
+	}
+
+	// 3. Fallback: check for install.ps1 in exeDir or cwd
+	psScript := filepath.Join(exeDir, "install.ps1")
+	if _, err := os.Stat(psScript); err != nil {
+		psScript = "install.ps1"
+	}
+	if _, err := os.Stat(psScript); err == nil {
+		cmd := exec.Command("powershell.exe", "-ExecutionPolicy", "Bypass", "-File", psScript, "-Uninstall")
+		_ = cmd.Start()
+		*quitting = true
+		mw.Close()
+		return
+	}
+
+	// 4. Standalone/portable cleanup
+	tempDir := filepath.Join(os.TempDir(), "SmartPrint")
+	_ = os.RemoveAll(tempDir)
+	if cacheDir, err := os.UserCacheDir(); err == nil {
+		_ = os.RemoveAll(filepath.Join(cacheDir, "SmartPrint"))
+	}
+
+	walk.MsgBox(mw, "SmartPrint Agent",
+		"Auto-start and local cache files have been removed.\nThe agent will now exit.",
+		walk.MsgBoxIconInformation)
+	*quitting = true
+	mw.Close()
+}
+

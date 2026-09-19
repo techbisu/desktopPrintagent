@@ -39,6 +39,8 @@ type Manager struct {
 	engine    *printer.Engine
 	processor docprocessor.DocumentProcessor
 	jobs      chan PrintJob
+	quit      chan struct{}
+	stopOnce  sync.Once
 
 	mu        sync.Mutex
 	history   map[string]*PrintJob
@@ -53,6 +55,7 @@ func NewManager(cfgStore *config.Store, engine *printer.Engine, processor docpro
 		engine:    engine,
 		processor: processor,
 		jobs:      make(chan PrintJob, bufferSize),
+		quit:      make(chan struct{}),
 		history:   make(map[string]*PrintJob),
 	}
 }
@@ -74,6 +77,13 @@ func (m *Manager) Start(workerCount int) {
 	for i := 0; i < workerCount; i++ {
 		go m.workerLoop()
 	}
+}
+
+// Stop signals all worker goroutines in the pool to shut down cleanly.
+func (m *Manager) Stop() {
+	m.stopOnce.Do(func() {
+		close(m.quit)
+	})
 }
 
 // Enqueue adds a new job straight into the print pipeline. Used for
@@ -176,8 +186,16 @@ func (m *Manager) Preview(jobID string) error {
 }
 
 func (m *Manager) workerLoop() {
-	for job := range m.jobs {
-		m.process(job)
+	for {
+		select {
+		case <-m.quit:
+			return
+		case job, ok := <-m.jobs:
+			if !ok {
+				return
+			}
+			m.process(job)
+		}
 	}
 }
 

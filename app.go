@@ -77,10 +77,13 @@ func (a *App) Start() {
 	}
 }
 
-// Stop tears down the Pusher connection cleanly. Call on window close.
+// Stop tears down the Pusher connection and worker pool cleanly. Call on window close.
 func (a *App) Stop() {
 	if a.pusher != nil {
 		a.pusher.Stop()
+	}
+	if a.manager != nil {
+		a.manager.Stop()
 	}
 }
 

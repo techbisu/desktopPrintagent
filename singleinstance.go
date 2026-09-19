@@ -68,3 +68,10 @@ func killOtherInstances() {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd.Run()
 }
+
+// KillAllInstances forcefully terminates any running SmartPrintAgent or SumatraPDF processes.
+func KillAllInstances() {
+	cmd := exec.Command("taskkill", "/F", "/IM", "SmartPrintAgent.exe", "/IM", "SumatraPDF.exe")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	_ = cmd.Run()
+}
