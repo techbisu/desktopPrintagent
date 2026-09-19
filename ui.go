@@ -282,7 +282,6 @@ func runUI(app *App, startMinimized bool) error {
 							TableView{
 								AssignTo:            &queueTable,
 								AlternatingRowBG:    true,
-								Gridlines:           true,
 								ColumnsOrderable:    true,
 								ColumnsSizable:      true,
 								LastColumnStretched: true,
@@ -507,6 +506,10 @@ func runUI(app *App, startMinimized bool) error {
 		if logoImageView != nil {
 			_ = logoImageView.SetImage(appIcon)
 		}
+	}
+
+	if queueTable != nil {
+		queueTable.SetGridlines(true)
 	}
 
 	if _, err := setupTray(mw, &quitting); err != nil {
